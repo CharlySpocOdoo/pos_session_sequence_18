@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pos_session_seq" model="ir.sequence">
+        <field name="name">POS Session Custom Sequence</field>
+        <field name="code">pos.session.custom</field>
+        <field name="prefix">SESS/%(year)s/</field>
+        <field name="padding">4</field>
+    </record>
+</odoo>
