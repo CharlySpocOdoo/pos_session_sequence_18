@@ -6,9 +6,14 @@ class PosSession(models.Model):
 
     @api.model
     def create(self, vals):
-        session = super().create(vals)
+        if not vals.get("name") and vals.get("config_id"):
+            config = self.env["pos.config"].browse(vals["config_id"])
 
-        if session.config_id and session.config_id.session_sequence_id:
-            session.name = session.config_id.session_sequence_id.next_by_id()
+            if config.session_sequence_id:
+                # 1️⃣ Generamos el nombre SOLO una vez
+                vals["name"] = config.session_sequence_id.next_by_id()
 
-        return session
+                # 2️⃣ Evitamos que el core consuma la secuencia global
+                vals["sequence_number"] = False
+
+        return super().create(vals)
