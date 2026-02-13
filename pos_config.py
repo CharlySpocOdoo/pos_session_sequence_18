@@ -17,7 +17,7 @@ class PosConfig(models.Model):
     )
 
     def open_session_cb(self, opening_details):
-        """Called when opening a POS register (creating a pos.session)."""
+        """Called when opening the POS register; creates the pos.session."""
         self.ensure_one()
         ctx = dict(self.env.context or {})
         if self.session_sequence_id:

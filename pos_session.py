@@ -10,11 +10,11 @@ class PosSession(models.Model):
         if seq_id:
             seq = self.env["ir.sequence"].browse(seq_id)
             for vals in vals_list:
-                # En POS el name suele venir como '/' (placeholder). Lo forzamos.
+                # En POS normalmente viene name='/' (placeholder), así que esto SÍ entra.
                 if vals.get("name") in (False, None, "", "/"):
                     vals["name"] = seq.next_by_id()
                 else:
-                    # Incluso si ya viene algo, lo puedes forzar igual si quieres:
+                    # Si prefieres forzarlo siempre aunque ya venga algo, descomenta:
                     # vals["name"] = seq.next_by_id()
                     pass
 
