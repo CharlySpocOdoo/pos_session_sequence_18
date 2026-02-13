@@ -12,7 +12,7 @@ class PosSession(models.Model):
     def create(self, vals_list):
         seq_id = self.env.context.get("force_pos_session_sequence_id")
 
-        _logger.info(
+        _logger.warning(
             "POS_SEQ DEBUG pos.session.create: ctx force_pos_session_sequence_id=%s vals_count=%s first_vals_name=%s config_id=%s",
             seq_id,
             len(vals_list),
@@ -20,9 +20,10 @@ class PosSession(models.Model):
             (vals_list[0] or {}).get("config_id") if vals_list else None,
         )
 
+        forced_names = None
         if seq_id:
             seq = self.env["ir.sequence"].browse(seq_id)
-            _logger.info(
+            _logger.warning(
                 "POS_SEQ DEBUG pos.session.create: using seq id=%s name=%s code=%s prefix=%s next=%s",
                 seq.id,
                 seq.name,
@@ -31,28 +32,34 @@ class PosSession(models.Model):
                 seq.number_next_actual,
             )
 
-            for vals in vals_list:
-                if vals.get("name") in (False, None, "", "/"):
-                    new_name = seq.next_by_id()
-                    _logger.info(
-                        "POS_SEQ DEBUG pos.session.create: forcing name from %s to %s",
-                        vals.get("name"),
-                        new_name,
-                    )
-                    vals["name"] = new_name
-                else:
-                    _logger.info(
-                        "POS_SEQ DEBUG pos.session.create: name already present (%s), not forcing",
-                        vals.get("name"),
-                    )
-        else:
-            _logger.warning("POS_SEQ DEBUG pos.session.create: NO ctx force_pos_session_sequence_id")
+            # Genera nombres (uno por registro) antes del create
+            forced_names = [seq.next_by_id() for _ in vals_list]
+            _logger.warning("POS_SEQ DEBUG pos.session.create: forced_names=%s", forced_names)
 
-        session = super().create(vals_list)
+        # Crea con core (aquí Odoo te lo sobreescribe)
+        sessions = super().create(vals_list)
 
-        _logger.info(
-            "POS_SEQ DEBUG pos.session.create: created session ids=%s names=%s",
-            session.ids,
-            session.mapped("name"),
+        _logger.warning(
+            "POS_SEQ DEBUG pos.session.create: after super() ids=%s names=%s",
+            sessions.ids,
+            sessions.mapped("name"),
         )
-        return session
+
+        # ✅ Fix: reescribir name después
+        if forced_names:
+            for session, forced_name in zip(sessions, forced_names):
+                old_name = session.name
+                session.sudo().write({"name": forced_name})
+                _logger.warning(
+                    "POS_SEQ DEBUG pos.session.create: POST-WRITE name %s -> %s (session_id=%s)",
+                    old_name,
+                    forced_name,
+                    session.id,
+                )
+
+            _logger.warning(
+                "POS_SEQ DEBUG pos.session.create: final names=%s",
+                sessions.mapped("name"),
+            )
+
+        return sessions
