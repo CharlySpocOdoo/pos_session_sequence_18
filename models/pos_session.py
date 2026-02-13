@@ -8,7 +8,6 @@ _logger = logging.getLogger(__name__)
 class PosSession(models.Model):
     _inherit = "pos.session"
 
-    # Guardamos el nombre correcto que generamos (para poder restaurarlo si alguien lo pisa)
     forced_session_name = fields.Char(copy=False, readonly=True)
 
     @api.model_create_multi
@@ -56,15 +55,12 @@ class PosSession(models.Model):
                     session.id,
                 )
 
-            _logger.warning(
-                "POS_SEQ DEBUG create: final names=%s",
-                sessions.mapped("name"),
-            )
+            _logger.warning("POS_SEQ DEBUG create: final names=%s", sessions.mapped("name"))
 
         return sessions
 
     def write(self, vals):
-        # LOG: detectar quién pisa el name
+        # Dejamos log SOLO si intentan cambiar el name (para debug)
         if "name" in vals:
             for s in self:
                 _logger.error(
@@ -75,18 +71,42 @@ class PosSession(models.Model):
                     vals.get("name"),
                     s.forced_session_name,
                 )
+        return super().write(vals)
 
-        res = super().write(vals)
+    def set_opening_control(self, cashbox_value, notes):
+        """
+        En Odoo 18, este método vuelve a escribir 'name' con la secuencia global.
+        Aquí lo evitamos si el POS tiene secuencia personalizada.
+        """
+        self.ensure_one()
 
-        # PROTECCIÓN: si alguien lo pisó, lo restauramos
-        for s in self:
-            if s.forced_session_name and s.name != s.forced_session_name:
-                _logger.error(
-                    "POS_SEQ DEBUG RESTORE: session_id=%s name was overwritten (%s). Restoring to %s",
-                    s.id,
-                    s.name,
-                    s.forced_session_name,
-                )
-                super(PosSession, s.sudo()).write({"name": s.forced_session_name})
+        # Si no hay secuencia personalizada, no hacemos nada especial
+        if not self.config_id.session_sequence_id:
+            return super().set_opening_control(cashbox_value, notes)
 
+        desired_name = self.forced_session_name or self.name
+        _logger.warning(
+            "POS_SEQ DEBUG set_opening_control: BEFORE super session_id=%s name=%s desired=%s seq_id=%s",
+            self.id,
+            self.name,
+            desired_name,
+            self.config_id.session_sequence_id.id,
+        )
+
+        res = super().set_opening_control(cashbox_value, notes)
+
+        # Si el super lo pisó, lo restauramos aquí (solo aquí)
+        if self.name != desired_name:
+            _logger.error(
+                "POS_SEQ DEBUG set_opening_control: name overwritten %s -> %s. Restoring.",
+                self.name,
+                desired_name,
+            )
+            self.sudo().write({"name": desired_name})
+
+        _logger.warning(
+            "POS_SEQ DEBUG set_opening_control: AFTER super session_id=%s name=%s",
+            self.id,
+            self.name,
+        )
         return res
