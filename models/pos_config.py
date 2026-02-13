@@ -21,7 +21,7 @@ class PosConfig(models.Model):
     )
 
     def open_session_cb(self, opening_details):
-        """Called (in some flows) when opening the POS register; may create a pos.session."""
+        """Some flows call this; keep it instrumented."""
         self.ensure_one()
 
         _logger.warning(
@@ -43,12 +43,11 @@ class PosConfig(models.Model):
             _logger.warning("POS_SEQ DEBUG open_session_cb: POS has NO session_sequence_id configured")
 
         result = super(PosConfig, self.with_context(ctx)).open_session_cb(opening_details)
-
         _logger.warning("POS_SEQ DEBUG open_session_cb: super() returned=%s", result)
         return result
 
     def open_ui(self):
-        """This is the method we SEE being called in your logs (pos.config/open_ui)."""
+        """THIS is the flow you are using (pos.config/open_ui). We must pass the ctx here."""
         self.ensure_one()
 
         _logger.warning(
@@ -59,4 +58,14 @@ class PosConfig(models.Model):
             self.current_session_id.id if getattr(self, "current_session_id", False) else None,
         )
 
-        return super().open_ui()
+        ctx = dict(self.env.context or {})
+        if self.session_sequence_id:
+            ctx["force_pos_session_sequence_id"] = self.session_sequence_id.id
+            _logger.warning(
+                "POS_SEQ DEBUG open_ui: setting ctx force_pos_session_sequence_id=%s",
+                self.session_sequence_id.id,
+            )
+        else:
+            _logger.warning("POS_SEQ DEBUG open_ui: POS has NO session_sequence_id configured")
+
+        return super(PosConfig, self.with_context(ctx)).open_ui()
